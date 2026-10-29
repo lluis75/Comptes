@@ -145,9 +145,27 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .mhead .t{font-family:var(--f-display);font-weight:600;font-size:21px;text-transform:capitalize}
 .mhead .s{font-size:12.5px;color:var(--ink-3)}
 .list{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
-.mv{display:grid;grid-template-columns:40px 1fr auto;gap:12px;align-items:center;width:100%;text-align:left;border:0;background:transparent;padding:12px 14px;border-top:1px solid var(--line)}
-.mv:first-child{border-top:0}
-.mv:hover{background:var(--surface-2)}
+.mvw{position:relative;overflow:hidden;border-top:1px solid var(--line);background:var(--neg)}
+.mvw:first-child{border-top:0}
+.mvdel{position:absolute;top:0;right:0;bottom:0;width:96px;border:0;background:var(--neg);color:#fff;font-weight:500;font-size:13.5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.mvdel svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.mv{position:relative;display:grid;grid-template-columns:40px 1fr auto;gap:12px;align-items:center;width:100%;text-align:left;border:0;background:var(--surface);padding:12px 14px;transition:transform .22s cubic-bezier(.2,.8,.2,1),background .15s;touch-action:pan-y}
+.mv.drag{transition:none}
+.mv:hover{background:color-mix(in srgb,var(--surface-2) 60%,var(--surface))}
+.mv .ck{display:none}
+.selmode .mv .d{display:none}
+.selmode .mv .ck{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;border:1.5px solid var(--line);color:transparent;font-size:17px;font-weight:600}
+.selmode .mv.on{background:var(--neg-soft)}
+.selmode .mv.on .ck{background:var(--neg);border-color:var(--neg);color:#fff}
+.hint{font-size:12px;color:var(--ink-3);text-align:center}
+.selbar{position:fixed;z-index:27;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom,0px));padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px))}
+.selbar .in{max-width:568px;margin:0 auto 10px;background:var(--ink);color:var(--bg);border-radius:16px;padding:10px 10px 10px 16px;display:flex;align-items:center;gap:8px;box-shadow:var(--shadow)}
+.selbar .n{flex:1;font-weight:500;font-size:14px;min-width:0}
+.selbar .btn{background:transparent;color:var(--bg);border-color:color-mix(in srgb,var(--bg) 30%,transparent)}
+.selbar .btn.danger{background:var(--neg);border-color:var(--neg);color:#fff}
+.selbar .btn.danger:disabled{opacity:.45}
+.selbar .btn.danger.arm{background:#fff;color:var(--neg);border-color:#fff}
+.linkbtn{border:0;background:transparent;color:var(--sky-ink);font-weight:500;font-size:13px;padding:0}
 .mv .d{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;line-height:1;font-size:15px;font-weight:500;background:var(--surface-2);color:var(--ink-2)}
 .mv .d small{display:block;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-top:1px}
 .mv.in .d{background:var(--sky-soft);color:var(--sky-ink)}
@@ -330,6 +348,13 @@ details.boxes[open] summary::before{content:"－ "}
   </div>
 </div>
 
+<div class="selbar" id="selbar" hidden><div class="in">
+  <span class="n num" id="selN">0 seleccionats</span>
+  <button type="button" class="btn" id="selAll">Tots</button>
+  <button type="button" class="btn danger" id="selDel" disabled>Eliminar</button>
+  <button type="button" class="btn" id="selCancel" aria-label="Sortir de la selecció">✕</button>
+</div></div>
+
 <div class="toast" id="toast" hidden><span id="toastMsg"></span><button type="button" id="toastAct" hidden>Desfer</button></div>
 
 <script>
@@ -409,6 +434,7 @@ function defaults(){return {year:CY,quota:302.65,autoQuota:true,retDef:15,ivaDef
 /* ---------- Estat ---------- */
 var S;
 function load(){try{var raw=localStorage.getItem(KEY);if(raw){S=JSON.parse(raw)}}catch(e){}
+  var seed=window.__SEED;if(seed&&(!S||!S.moves||S.sample||(!S.moves.length&&S.seedId!==seed.seedId))){S=JSON.parse(JSON.stringify(seed));try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
   if(!S||!S.moves){S=sample()}S.settings=Object.assign(defaults(),S.settings||{});S.filed=S.filed||{};}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 var UI={view:'resum',filter:'all',q:'',tq:null,editing:null,type:'in',iva:21,ret:0};
@@ -417,8 +443,8 @@ var UI={view:'resum',filter:'all',q:'',tq:null,editing:null,type:'in',iva:21,ret
 function yr(){return +S.settings.year}
 function movesY(y){return S.moves.filter(function(m){return +m.d.slice(0,4)===y})}
 function inQ(m,y,q){return +m.d.slice(0,4)===y&&qOf(m.d)===q}
-function ivaAmt(m){return r2(m.base*m.iva/100)}
-function retAmt(m){return r2(m.base*m.ret/100)}
+function ivaAmt(m){return m.base*m.iva/100}
+function retAmt(m){return m.base*m.ret/100}
 function cashAmt(m){return r2(m.base+ivaAmt(m)-retAmt(m))}
 function monthsElapsed(y){return y<CY?12:y>CY?0:CM+1}
 function quotaMonths(y,upToMonth){/* mesos 0..upToMonth comptats */var lim=y<CY?11:y>CY?-1:CM;return Math.max(0,Math.min(upToMonth,lim)+1)}
@@ -504,7 +530,7 @@ function renderResum(){
        '<span class="k" style="--c:transparent">Facturat (sense IVA)</span><span class="v">'+eur(s.fact)+'</span>'+
        '<span class="k" style="--c:#3A5680">Despeses</span><span class="v">−'+eur(s.desp)+'</span>'+
        '<span class="k" style="--c:#5E7FA9">Quota d\'autònom · '+s.qm+' mesos</span><span class="v">−'+eur(s.quota)+'</span>'+
-       '<span class="k" style="--c:#9FC8EE">IRPF estimat · '+(s.irpfRate*100).toFixed(1).replace('.',',')+'% efectiu</span><span class="v">−'+eur(s.irpf)+'</span>'+
+       '<span class="k" style="--c:#9FC8EE">IRPF estimat · '+(s.irpfRate*100).toFixed(1).replace('.',',')+'% efectiu</span><span class="v">'+(s.irpf>=0.005?'−':'')+eur(s.irpf)+'</span>'+
        '<span class="k tot" style="--c:var(--sky)">Net a la butxaca</span><span class="v tot">'+eur(s.net)+'</span>'+
      '</div></div>';
   h+='<div class="card reserve"><div class="card-head"><div><div class="eyebrow">Aparta per a impostos</div></div>'+
@@ -559,23 +585,53 @@ function renderMoviments(){
   var ti=0,to=0;list.forEach(function(m){if(m.t==='in')ti+=m.base;else to+=m.base});
   var h='<div class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--ink-3)"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><input id="q" type="search" placeholder="Cerca per concepte, client o categoria" value="'+esc(UI.q)+'"></div>';
   h+='<div class="filters">'+[['all','Tots'],['in','Ingressos'],['out','Despeses'],['pend','Pendents de cobrar']].map(function(x){return '<button type="button" class="fbtn" data-f="'+x[0]+'" aria-pressed="'+(f===x[0])+'">'+x[1]+'</button>'}).join('')+'</div>';
-  h+='<div class="sumline num"><span>'+list.length+' moviments</span><span style="color:var(--pos)">+'+eur(ti)+'</span><span>−'+eur(to)+'</span><span class="muted">bases sense IVA</span></div>';
+  UI.visible=list.map(function(m){return m.id});
+  h+='<div class="sumline num"><span>'+list.length+' moviments</span><span style="color:var(--pos)">+'+eur(ti)+'</span><span>−'+eur(to)+'</span><span class="muted">bases sense IVA</span>'+
+     (list.length&&!UI.sel?'<button type="button" class="linkbtn" id="selStart" style="margin-left:auto">Seleccionar</button>':'')+'</div>';
+  if(list.length)h+='<div class="hint">'+(UI.sel?'Toca els moviments que vols eliminar':'Llisca un moviment cap a l\'esquerra per eliminar-lo')+'</div>';
+  h+='<div class="'+(UI.sel?'selmode':'')+'" style="display:flex;flex-direction:column;gap:14px">';
   if(!list.length){h+=all.length?'<div class="card empty">Cap moviment coincideix amb la cerca.</div>':emptyYear(y)}
   var byM={};list.forEach(function(m){var k=m.d.slice(0,7);(byM[k]=byM[k]||[]).push(m)});
   Object.keys(byM).sort().reverse().forEach(function(k){var arr=byM[k],mi=0,mo=0;arr.forEach(function(m){if(m.t==='in')mi+=m.base;else mo+=m.base});
     h+='<div class="month"><div class="mhead"><span class="t">'+MES[+k.slice(5)-1]+'</span><span class="s num">+'+eur0(mi)+' · −'+eur0(mo)+'</span></div><div class="list">'+
       arr.map(row).join('')+'</div></div>'});
-  el.innerHTML=h;
+  h+='</div>';
+  el.innerHTML=h;UI.open=null;syncSel();
+  var ss=$('#selStart');if(ss)ss.addEventListener('click',function(){UI.sel={};renderMoviments()});
+  $$('.mv',el).forEach(swipe);
   var qi=$('#q');qi.addEventListener('input',function(){UI.q=qi.value;var pos=qi.selectionStart;renderMoviments();var n=$('#q');n.focus();try{n.setSelectionRange(pos,pos)}catch(e){}});
 }
 function row(m){var d=parseD(m.d);var tags=[];
   if(m.t==='in'&&!m.paid)tags.push('<span class="pill warn">Pendent</span>');
   if(m.ret>0)tags.push('<span class="pill">Ret. '+m.ret+'%</span>');
   if(m.t==='out'&&!m.ded)tags.push('<span class="pill neg">No deduïble</span>');
-  var amt=m.t==='in'?'+'+eur(m.base+ivaAmt(m)):'−'+eur(m.base+ivaAmt(m));
-  return '<button type="button" class="mv '+m.t+'" data-id="'+m.id+'"><span class="d num">'+d.getDate()+'<small>'+MESC[d.getMonth()]+'</small></span>'+
+  var amt=(m.t==='in'?'+':'−')+eur(r2(m.base+ivaAmt(m)));
+  var on=UI.sel&&UI.sel[m.id];
+  return '<div class="mvw"><button type="button" class="mvdel" data-del="'+m.id+'" tabindex="-1"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg>Eliminar</button>'+
+    '<button type="button" class="mv '+m.t+(on?' on':'')+'" data-id="'+m.id+'"'+(UI.sel?' aria-pressed="'+!!on+'"':'')+'><span class="d num">'+d.getDate()+'<small>'+MESC[d.getMonth()]+'</small></span><span class="ck" aria-hidden="true">✓</span>'+
     '<span class="m"><span class="c" style="display:block">'+esc(m.c)+'</span><span class="p" style="display:block">'+esc(m.p||'')+(m.p?' · ':'')+esc(m.cat)+'</span></span>'+
-    '<span><span class="a num" style="display:block">'+amt+'</span>'+(tags.length?'<span class="tags">'+tags.join('')+'</span>':'<span class="tags"><span class="pill">IVA '+m.iva+'%</span></span>')+'</span></button>'}
+    '<span><span class="a num" style="display:block">'+amt+'</span>'+(tags.length?'<span class="tags">'+tags.join('')+'</span>':'<span class="tags"><span class="pill">IVA '+m.iva+'%</span></span>')+'</span></button></div>'}
+
+/* ---------- Eliminar: lliscar, seleccionar i desfer ---------- */
+function swipe(btn){var x0,y0,dx=0,mode=null,base=0;
+  btn.addEventListener('touchstart',function(e){if(UI.sel)return;var t=e.touches[0];x0=t.clientX;y0=t.clientY;dx=0;mode=null;
+    if(UI.open&&UI.open!==btn)closeRow();base=(UI.open===btn)?-96:0},{passive:true});
+  btn.addEventListener('touchmove',function(e){if(UI.sel||x0==null)return;var t=e.touches[0],ddx=t.clientX-x0,ddy=t.clientY-y0;
+    if(!mode){if(Math.abs(ddx)<8&&Math.abs(ddy)<8)return;mode=Math.abs(ddx)>Math.abs(ddy)?'h':'v'}
+    if(mode!=='h')return;dx=Math.max(-130,Math.min(0,base+ddx));btn.classList.add('drag');btn.style.transform='translateX('+dx+'px)'},{passive:true});
+  btn.addEventListener('touchend',function(){if(mode==='h'){btn.classList.remove('drag');btn.dataset.swiped='1';setTimeout(function(){delete btn.dataset.swiped},350);
+      if(dx<-48){btn.style.transform='translateX(-96px)';UI.open=btn}else{btn.style.transform='';if(UI.open===btn)UI.open=null}}
+    x0=null;mode=null});}
+function closeRow(){if(UI.open){UI.open.style.transform='';UI.open=null}}
+var undoT=null;
+function removeIds(ids,msg){var snap=S.moves.slice(),n=0;
+  S.moves=S.moves.filter(function(m){if(ids.indexOf(m.id)>-1){n++;return false}return true});
+  if(!n)return;save();render();
+  toast(msg||(n===1?'Moviment eliminat':n+' moviments eliminats'),function(){S.moves=snap;commit(n===1?'Recuperat':n+' moviments recuperats')});}
+function syncSel(){var bar=$('#selbar');var on=!!UI.sel&&UI.view==='moviments';bar.hidden=!on;$('#fab').hidden=on||UI.view==='ajustos';if(!on)return;
+  var n=Object.keys(UI.sel).length;$('#selN').textContent=n+(n===1?' seleccionat':' seleccionats');
+  var d=$('#selDel');d.disabled=!n;d.classList.remove('arm');d.textContent='Eliminar';
+  var all=UI.visible.length&&UI.visible.every(function(id){return UI.sel[id]});$('#selAll').textContent=all?'Cap':'Tots';}
 
 /* ---------- Render: Impostos ---------- */
 function renderImpostos(){
@@ -671,7 +727,8 @@ function renderAjustos(){
   $('#cpy').addEventListener('click',function(){var t=JSON.stringify(S);try{navigator.clipboard.writeText(t).then(function(){toast('Dades copiades')},function(){toast('No s\'ha pogut copiar')})}catch(e){toast('No s\'ha pogut copiar')}});
   $('#imp').addEventListener('change',importFile);
   armBtn($('#loadSample'),'Confirma: substituir',function(){S=sample();UI.tq=null;commit('Dades d\'exemple carregades')});
-  armBtn($('#wipe'),'Confirma: esborrar',function(){S={v:1,sample:false,moves:[],filed:{},settings:Object.assign(defaults(),{quota:S.settings.quota,retDef:S.settings.retDef,ivaDef:S.settings.ivaDef})};commit('Tot esborrat')});
+  armBtn($('#wipe'),'Confirma: esborrar',function(){var snap=JSON.parse(JSON.stringify(S));S={v:1,sample:false,moves:[],filed:{},settings:Object.assign(defaults(),{quota:S.settings.quota,retDef:S.settings.retDef,ivaDef:S.settings.ivaDef})};save();render();
+    toast('Tot esborrat',function(){S=snap;commit('Dades recuperades')})});
   var ib=$('#install');if(ib)ib.addEventListener('click',function(){if(!deferredPrompt)return;deferredPrompt.prompt();deferredPrompt=null;$('#installRow').hidden=true});
 }
 function armBtn(b,txt,fn){var orig=b.textContent,t;b.addEventListener('click',function(){if(b.classList.contains('arm')){clearTimeout(t);fn()}else{b.classList.add('arm');b.classList.add('danger');b.textContent=txt;t=setTimeout(function(){b.classList.remove('arm');b.textContent=orig},3500)}})}
@@ -719,20 +776,26 @@ function partyDefaults(){var p=$('#f-party').value.trim();if(!p||UI.editing)retu
 
 /* ---------- Esdeveniments ---------- */
 function commit(msg){save();render();if(msg)toast(msg)}
-var toastT;function toast(msg,act){var t=$('#toast');$('#toastMsg').textContent=msg;var b=$('#toastAct');b.hidden=!act;b.onclick=act?function(){act();t.hidden=true}:null;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true},act?5000:2600)}
-function go(v){if(['resum','moviments','impostos','ajustos'].indexOf(v)<0)v='resum';UI.view=v;
+var toastT;function toast(msg,act){var t=$('#toast');$('#toastMsg').textContent=msg;var b=$('#toastAct');b.hidden=!act;b.onclick=act?function(){act();t.hidden=true}:null;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true},act?7000:2600)}
+function go(v){if(['resum','moviments','impostos','ajustos'].indexOf(v)<0)v='resum';if(v!==UI.view)UI.sel=null;UI.view=v;
   $$('.view').forEach(function(s){s.hidden=s.dataset.view!==v});$$('.tab').forEach(function(t){t.setAttribute('aria-current',t.dataset.go===v?'page':'false')});
   $('#fab').hidden=v==='ajustos';render();window.scrollTo(0,0);}
 function render(){
   var ys={};ys[CY]=1;S.moves.forEach(function(m){ys[m.d.slice(0,4)]=1});ys[S.settings.year]=1;
   $('#yearSel').innerHTML=Object.keys(ys).sort().reverse().map(function(y){return '<option'+(+y===yr()?' selected':'')+'>'+y+'</option>'}).join('');
   $('#sampleBanner').hidden=!S.sample;
-  ({resum:renderResum,moviments:renderMoviments,impostos:renderImpostos,ajustos:renderAjustos})[UI.view]();}
+  ({resum:renderResum,moviments:renderMoviments,impostos:renderImpostos,ajustos:renderAjustos})[UI.view]();syncSel();}
 
-document.addEventListener('click',function(e){var t=e.target.closest('[data-go],[data-f],[data-id],[data-q],[data-file],[data-set],[data-act],[data-iva],[data-ret],[data-type]');if(!t)return;
+document.addEventListener('click',function(e){var t=e.target.closest('[data-go],[data-f],[data-id],[data-del],[data-q],[data-file],[data-set],[data-act],[data-iva],[data-ret],[data-type]');
+  if(UI.open&&(!t||!(t.dataset.del||t===UI.open))){closeRow();if(t&&t.dataset.id)return}
+  if(!t)return;
   if(t.dataset.go){location.hash=t.dataset.go;return}
   if(t.dataset.f){UI.filter=t.dataset.f;renderMoviments();return}
-  if(t.dataset.id){openSheet(t.dataset.id);return}
+  if(t.dataset.del){removeIds([t.dataset.del]);return}
+  if(t.dataset.id){if(t.dataset.swiped)return;
+    if(UI.sel){if(UI.sel[t.dataset.id])delete UI.sel[t.dataset.id];else UI.sel[t.dataset.id]=1;var on=!!UI.sel[t.dataset.id];t.classList.toggle('on',on);t.setAttribute('aria-pressed',on);syncSel();return}
+    if(UI.open===t){closeRow();return}
+    openSheet(t.dataset.id);return}
   if(t.dataset.q){UI.tq=+t.dataset.q;renderImpostos();return}
   if(t.dataset.file){var k=t.dataset.file;if(S.filed[k])delete S.filed[k];else S.filed[k]=true;commit(S.filed[k]?'Model '+k.split('-')[2]+' marcat com a presentat':null);return}
   if(t.dataset.set){S.settings[t.dataset.set]=+t.dataset.v;commit();return}
@@ -748,7 +811,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('#sheetW
 $('#f-amount').addEventListener('input',preview);$('#f-incl').addEventListener('change',preview);
 $('#f-cat').addEventListener('change',catDefaults);$('#f-party').addEventListener('change',partyDefaults);
 $('#yearSel').addEventListener('change',function(e){S.settings.year=+e.target.value;UI.tq=null;commit()});
-$('#startClean').addEventListener('click',function(){S={v:1,sample:false,moves:[],filed:{},settings:defaults()};UI.tq=null;commit('Llest. Afegeix el teu primer moviment amb el +')});
+$('#startClean').addEventListener('click',function(){var snap=S;S={v:1,sample:false,moves:[],filed:{},settings:defaults()};UI.tq=null;save();render();toast('Llest. Afegeix el teu primer moviment amb el +',function(){S=snap;commit('Exemple recuperat')})});
 $('#mvForm').addEventListener('submit',function(e){e.preventDefault();
   var a=parseNum($('#f-amount').value);if(isNaN(a)||a<=0){toast('Escriu un import més gran que zero');$('#f-amount').focus();return}
   var d=$('#f-date').value;if(!d){toast('Tria una data');return}
@@ -761,8 +824,12 @@ $('#mvForm').addEventListener('submit',function(e){e.preventDefault();
   closeSheet();commit(isNew?(m.t==='in'?'Ingrés desat':'Despesa desada'):'Canvis desats');});
 $('#delBtn').addEventListener('click',function(){var b=$('#delBtn');
   if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='Confirma: eliminar';return}
-  var m=UI.editing;if(!m)return;var i=S.moves.indexOf(m);S.moves.splice(i,1);closeSheet();save();render();
-  toast('Moviment eliminat',function(){S.moves.splice(i,0,m);commit('Recuperat')});});
+  var m=UI.editing;if(!m)return;closeSheet();removeIds([m.id]);});
+$('#selAll').addEventListener('click',function(){var all=UI.visible.every(function(id){return UI.sel[id]});UI.sel={};if(!all)UI.visible.forEach(function(id){UI.sel[id]=1});renderMoviments()});
+$('#selCancel').addEventListener('click',function(){UI.sel=null;renderMoviments()});
+$('#selDel').addEventListener('click',function(){var b=$('#selDel'),ids=Object.keys(UI.sel);if(!ids.length)return;
+  if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='Confirma ('+ids.length+')';return}
+  UI.sel=null;removeIds(ids);});
 window.addEventListener('hashchange',function(){go(location.hash.slice(1))});
 window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferredPrompt=e;var r=$('#installRow');if(r)r.hidden=false});
 

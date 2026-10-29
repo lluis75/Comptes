@@ -1,0 +1,46 @@
+{
+  "name": "Samyama Comptes",
+  "short_name": "Comptes",
+  "description": "Finances d'autònom de Samyama: moviments, impostos trimestrals i previsió.",
+  "lang": "ca",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F2F6FA",
+  "theme_color": "#21406A",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Impostos",
+      "url": "./#impostos"
+    },
+    {
+      "name": "Moviments",
+      "url": "./#moviments"
+    }
+  ]
+}

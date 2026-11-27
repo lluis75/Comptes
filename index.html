@@ -188,6 +188,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .seg button{border:0;background:transparent;border-radius:9px;padding:8px 0;font-weight:500;color:var(--ink-2)}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 .seg.two{grid-template-columns:1fr 1fr}
+.seg.three{grid-template-columns:1fr 1fr 1fr}
+.pchart.all .pb rect.v{opacity:.85}
+.ystat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px dashed var(--line);padding-top:12px;margin-top:12px}
+.ystat>div{min-width:0}
+.ystat .v{font-weight:500;font-size:15px;font-variant-numeric:tabular-nums}
 /* Períodes */
 .pnav{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:8px}
 .pnav button{width:44px;height:44px;border-radius:14px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;color:var(--ink-2)}
@@ -734,12 +739,13 @@ function deltaChip(cur,prev,invert){if(!prev||Math.abs(prev)<1)return '';var d=(
   var good=invert?d<0:d>0;return '<span class="delta '+(good?'up':'down')+'">'+(d>0?'+':'−')+Math.abs(d).toFixed(0)+'%</span>';}
 function renderPeriodes(){
   var y=yr(),el=$('#v-periodes');
+  if(UI.pmode==='y'){renderAny(el,y);return}
   if(!movesY(y).length&&!(y===CY)){el.innerHTML=emptyYear(y);return}
   var list=periodList(y),i=defaultIdx(y,list);UI.pidx=i;var P=list[i];
   var rate=yearSummary(y).irpfRate;
   var stats=list.map(function(p){return periodStats(y,p.ms,rate)});var st=stats[i],pv=i>0?stats[i-1]:null,pvName=i>0?list[i-1].name:'';
   var last=list.filter(function(p){return !p.fut}).length-1;
-  var h='<div class="seg two" role="group" aria-label="Vista"><button type="button" data-pm="m" aria-pressed="'+(UI.pmode==='m')+'">Mes a mes</button><button type="button" data-pm="q" aria-pressed="'+(UI.pmode==='q')+'">Per trimestres</button></div>';
+  var h=pseg();
   var a=new Date(y,P.ms[0],1),b=new Date(y,P.ms[P.ms.length-1]+1,0);
   h+='<div class="pnav"><button type="button" data-pn="-1" aria-label="Període anterior"'+(i===0?' disabled':'')+'><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>'+
      '<div class="pt"><h2 class="h2'+(UI.pmode==='m'?' cap':'')+'">'+esc(P.name)+'</h2><div class="small muted">'+(UI.pmode==='q'?a.getDate()+' '+MESC[a.getMonth()]+' – '+b.getDate()+' '+MESC[b.getMonth()]+' ':'')+y+'</div></div>'+
@@ -772,6 +778,54 @@ function renderPeriodes(){
     '</tbody><tfoot><tr><td>Total</td><td>'+eur0(T.inc)+'</td><td>'+eur0(T.out)+'</td><td>'+eur0(T.net)+'</td></tr></tfoot></table></div>'+
     (last>=0?'<p class="small muted" style="margin:10px 0 0">Mitjana per '+(UI.pmode==='m'?'mes':'trimestre')+': <b class="num">'+eur0(T.inc/(last+1))+'</b> d\'ingressos i <b class="num">'+eur0(T.net/(last+1))+'</b> nets.</p>':'')+'</div>';
   el.innerHTML=h;}
+function pseg(){return '<div class="seg three" role="group" aria-label="Vista">'+[['m','Mes'],['q','Trimestre'],['y','Any']].map(function(o){return '<button type="button" data-pm="'+o[0]+'" aria-pressed="'+(UI.pmode===o[0])+'">'+o[1]+'</button>'}).join('')+'</div>'}
+function yearsAvail(){var ys={};ys[CY]=1;S.moves.forEach(function(m){ys[+m.d.slice(0,4)]=1});return Object.keys(ys).map(Number).sort()}
+function renderAny(el,y){
+  var ys=yearsAvail(),yi=ys.indexOf(y),h=pseg();
+  h+='<div class="pnav"><button type="button" data-py="-1" aria-label="Any anterior"'+(yi<=0?' disabled':'')+'><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>'+
+     '<div class="pt"><h2 class="h2">Any '+y+'</h2><div class="small muted">'+(y===CY?'Fins avui · '+fmtDay(TODAY):'Exercici complet')+'</div></div>'+
+     '<button type="button" data-py="1" aria-label="Any següent"'+(yi<0||yi>=ys.length-1?' disabled':'')+'><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button></div>';
+  if(!movesY(y).length){el.innerHTML=h+emptyYear(y);return}
+  var ys0=yearSummary(y),rate=ys0.irpfRate,all=[0,1,2,3,4,5,6,7,8,9,10,11];
+  var st=periodStats(y,all,rate),py=movesY(y-1).length?y-1:null,pv=null;
+  if(py){var rp=yearSummary(py).irpfRate;var lim=y===CY?CM:11;pv=periodStats(py,all.filter(function(i){return i<=lim}),rp)}
+  UI.pmode='m';var mlist=periodList(y);UI.pmode='y';
+  var mstats=mlist.map(function(p){return periodStats(y,p.ms,rate)});
+  h+='<div class="card"><div class="card-head"><span class="eyebrow">Net per mes</span><span class="small muted">toca un mes per veure\'l</span></div>'+pchart(mlist,mstats,-1).replace('class="pchart','class="pchart all')+'</div>';
+  h+='<div class="card"><div class="card-head"><h2 class="h2">Resum de l\'any</h2>'+(pv?'<span class="small muted">vs '+py+(y===CY?' (mateixos mesos)':'')+'</span>':'')+'</div><div class="pres num">'+
+     '<span class="k">Ingressos '+deltaChip(st.inc,pv&&pv.inc)+'</span><span class="v" style="color:var(--pos)">+'+eur(st.inc)+'</span>'+
+     '<span class="k">Despeses '+deltaChip(st.out,pv&&pv.out,true)+'</span><span class="v">−'+eur(st.out)+'</span>'+
+     '<span class="k">Quota d\'autònom</span><span class="v">'+(st.quota?'−':'')+eur(st.quota)+'</span>'+
+     '<span class="k">IRPF estimat · '+(rate*100).toFixed(1).replace('.',',')+'%</span><span class="v">'+(st.irpf>=.005?'−':'')+eur(st.irpf)+'</span>'+
+     '<span class="k tot">Net a la butxaca '+deltaChip(st.net,pv&&pv.net)+'</span><span class="v tot" style="color:'+(st.net<0?'var(--neg)':'var(--ink)')+'">'+eur(st.net)+'</span></div>';
+  var me=monthsElapsed(y)||12;
+  h+='<div class="ystat"><div><div class="eyebrow">Mitjana mes</div><div class="v">'+eur0(st.inc/me)+'</div><div class="small muted">ingressos</div></div><div><div class="eyebrow">Net mes</div><div class="v">'+eur0(st.net/me)+'</div><div class="small muted">a la butxaca</div></div>'+
+     (y===CY&&me<12?'<div><div class="eyebrow">Previsió</div><div class="v">'+eur0(ys0.endNet)+'</div><div class="small muted">net a desembre</div></div>':'<div><div class="eyebrow">Marge</div><div class="v">'+(st.inc?Math.round(st.net/st.inc*100):0)+'%</div><div class="small muted">dels ingressos</div></div>')+'</div>'+
+     '<p class="small muted" style="margin:10px 0 0">Imports sense IVA. L\'IRPF és una estimació, no el resultat de la renda.</p></div>';
+  // impostos de l'any
+  var T={'303':0,'130':0,'111':0,'115':0},filedN=0,dueN=0;
+  for(var q=1;q<=4;q++){var lastQ=y<CY?4:y>CY?0:CQ;if(q>lastQ)break;
+    T['303']+=Math.max(0,m303(y,q).b71);T['130']+=m130(y,q).pay;T['111']+=mRet(y,q,false).ret;T['115']+=mRet(y,q,true).ret;
+    ['303','130','111','115'].forEach(function(k){dueN++;if(S.filed[y+'-'+q+'-'+k])filedN++})}
+  var tt=T['303']+T['130']+T['111']+T['115'];
+  h+='<div class="card"><div class="card-head"><h2 class="h2">Impostos de l\'any</h2><span class="pill '+(filedN===dueN?'pos':'warn')+'">'+filedN+' de '+dueN+' presentats</span></div><div class="taxgrid">'+
+     ['303','130','111','115'].map(function(k){return '<button type="button" data-ptax="'+(y===CY?CQ:4)+'"><div class="no">'+k+'</div><div class="v">'+eur0(T[k])+'</div><div class="s">'+({'303':'IVA','130':'IRPF','111':'Retencions','115':'Lloguer'})[k]+'</div></button>'}).join('')+
+     '</div><div class="row" style="margin-top:12px"><span class="muted small">Total ingressat a Hisenda</span><b class="num">'+eur(tt)+'</b></div>'+
+     '<div class="row" style="margin-top:4px"><span class="muted small">Retencions que t\'han fet els clients</span><b class="num">'+eur(m130(y,y<CY?4:Math.max(1,CQ)).b06)+'</b></div></div>';
+  h+=breakdown('D\'on venen els ingressos',st.src,st.inc,'in');
+  h+=breakdown('On van les despeses',st.cats,st.out+st.quota,'');
+  // per trimestres
+  UI.pmode='q';var ql=periodList(y);UI.pmode='y';var Tq={inc:0,out:0,net:0};
+  h+='<div class="card"><div class="card-head"><h2 class="h2">Per trimestres</h2><span class="small muted">sense IVA</span></div><div class="tblwrap"><table class="ptab"><thead><tr><th>Trimestre</th><th>Ingressos</th><th>Despeses</th><th>Net</th></tr></thead><tbody>'+
+    ql.map(function(p,k){var s3=periodStats(y,p.ms,rate),o=s3.out+s3.quota,f=p.fut&&!s3.n;if(!f){Tq.inc+=s3.inc;Tq.out+=o;Tq.net+=s3.net}
+      return '<tr data-pq="'+k+'" class="'+(f?'fut':'')+'"><td>'+p.short+'</td>'+(f?'<td>—</td><td>—</td><td>—</td>':'<td>'+eur0(s3.inc)+'</td><td>'+eur0(o)+'</td><td class="'+(s3.net<0?'neg':'')+'">'+eur0(s3.net)+'</td>')+'</tr>'}).join('')+
+    '</tbody><tfoot><tr><td>Total</td><td>'+eur0(Tq.inc)+'</td><td>'+eur0(Tq.out)+'</td><td>'+eur0(Tq.net)+'</td></tr></tfoot></table></div></div>';
+  if(ys.length>1){h+='<div class="card"><div class="card-head"><h2 class="h2">Any per any</h2><span class="small muted">sense IVA</span></div><div class="tblwrap"><table class="ptab"><thead><tr><th>Any</th><th>Ingressos</th><th>Despeses</th><th>Net</th></tr></thead><tbody>'+
+    ys.slice().reverse().map(function(yy){if(!movesY(yy).length)return '';var r=periodStats(yy,all,yearSummary(yy).irpfRate),o=r.out+r.quota;
+      return '<tr data-pyy="'+yy+'" class="'+(yy===y?'on':'')+'"><td>'+yy+(yy===CY?'*':'')+'</td><td>'+eur0(r.inc)+'</td><td>'+eur0(o)+'</td><td class="'+(r.net<0?'neg':'')+'">'+eur0(r.net)+'</td></tr>'}).join('')+
+    '</tbody></table></div><p class="small muted" style="margin:10px 0 0">* Any en curs, fins avui.</p></div>'}
+  el.innerHTML=h;}
+function setYear(v){S.settings.year=v;UI.tq=null;UI.pidx=null;UI.mper=null;save();render()}
 function breakdown(title,obj,tot,cls){var cs=Object.keys(obj).map(function(k){return [k,obj[k]]}).sort(function(a,b){return b[1]-a[1]});if(!cs.length)return '';var mx=cs[0][1]||1;
   return '<div class="card"><div class="card-head"><h2 class="h2">'+title+'</h2><span class="small muted num">'+eur0(tot)+'</span></div><div class="cats">'+cs.slice(0,7).map(function(c){
     return '<div class="cat"><div class="row"><span>'+esc(c[0])+'</span><span class="num muted">'+eur(c[1])+' · '+Math.round(c[1]/(tot||1)*100)+'%</span></div><div class="bar '+cls+'"><i style="width:'+(c[1]/mx*100)+'%"></i></div></div>'}).join('')+'</div></div>';}
@@ -786,8 +840,12 @@ function pchart(list,stats,sel){var n=list.length,W=340,H=150,T=18,B=22,L=4,R=4,
       (k===sel&&!fut?'<text class="val" x="'+cx.toFixed(1)+'" y="'+(v<0?Math.min(H-B+12,sc(v)+12):sc(v)-5).toFixed(1)+'" text-anchor="middle">'+kfmt2(v)+'</text>':'')+'</g>'});
   return g+'</svg>';}
 function kfmt2(v){var a=Math.abs(v),s=v<0?'−':'';return s+(a>=1000?(a/1000).toFixed(1).replace('.',',')+'k':Math.round(a))+' €'}
-(function(){var el=document.getElementById('v-periodes');el.addEventListener('click',function(e){var t=e.target.closest('[data-p],[data-pm],[data-pn],[data-ptax],[data-pmov]');if(!t)return;
-  if(t.dataset.pm){if(UI.pmode!==t.dataset.pm){var cur=UI.pidx;UI.pmode=t.dataset.pm;UI.pidx=cur===null?null:(UI.pmode==='q'?Math.floor(cur/3):Math.min(cur*3+2,yr()===CY?CM:11))}renderPeriodes();return}
+(function(){var el=document.getElementById('v-periodes');el.addEventListener('click',function(e){var t=e.target.closest('[data-p],[data-pm],[data-pn],[data-ptax],[data-pmov],[data-py],[data-pq],[data-pyy]');if(!t)return;
+  if(t.dataset.py){var ys=yearsAvail(),k=ys.indexOf(yr())+ +t.dataset.py;if(ys[k]!=null)setYear(ys[k]);return}
+  if(t.dataset.pyy){setYear(+t.dataset.pyy);return}
+  if(t.dataset.pq!==undefined){UI.pmode='q';UI.pidx=+t.dataset.pq;renderPeriodes();return}
+  if(t.dataset.p!==undefined&&UI.pmode==='y'){UI.pmode='m';UI.pidx=+t.dataset.p;renderPeriodes();return}
+  if(t.dataset.pm){if(UI.pmode!==t.dataset.pm){var cur=UI.pidx,prev=UI.pmode;UI.pmode=t.dataset.pm;UI.pidx=(cur===null||prev==='y'||UI.pmode==='y')?null:(UI.pmode==='q'?Math.floor(cur/3):Math.min(cur*3+2,yr()===CY?CM:11))}renderPeriodes();return}
   if(t.dataset.pn){UI.pidx=Math.max(0,Math.min(UI.pmode==='m'?11:3,UI.pidx+ +t.dataset.pn));renderPeriodes();return}
   if(t.dataset.p!==undefined){UI.pidx=+t.dataset.p;renderPeriodes();return}
   if(t.dataset.ptax){UI.tq=+t.dataset.ptax;location.hash='impostos';return}

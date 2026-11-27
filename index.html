@@ -338,6 +338,16 @@ details.boxes[open] summary::before{content:"－ "}
 .sheet .actions{display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:2px}
 .sheet .actions .btn.primary{padding:11px 22px;font-size:15px}
 
+.xf{border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.xf .fn{font-weight:500;font-size:13.5px;word-break:break-all}
+.xf .grid{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:13px}
+.xf .grid .v{text-align:right;font-variant-numeric:tabular-nums}
+.xf .yr{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-2)}
+.xf .yr input{width:84px;padding:6px 10px}
+.xf.err{border-color:var(--neg);background:var(--neg-soft)}
+.xtot{background:var(--surface-2);border-radius:12px;padding:10px 12px;font-size:13.5px}
+.spin{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--sky);animation:sp 1s linear infinite;margin:0 auto}
+@keyframes sp{to{transform:rotate(360deg)}}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 14px;font-size:13.5px;display:flex;gap:14px;align-items:center;box-shadow:var(--shadow);max-width:calc(100% - 32px)}
 .toast button{border:0;background:transparent;color:var(--sky);font-weight:600;padding:0}
 
@@ -412,6 +422,14 @@ details.boxes[open] summary::before{content:"－ "}
   <button type="button" class="btn danger" id="selDel" disabled>Eliminar</button>
   <button type="button" class="btn" id="selCancel" aria-label="Sortir de la selecció">✕</button>
 </div></div>
+
+<div class="sheet-wrap" id="xlsWrap" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="xlsTitle">
+    <div class="grab"></div>
+    <div class="row"><h2 class="h2" id="xlsTitle">Importar Excel</h2><button type="button" class="btn ghost" id="xlsClose">Tancar</button></div>
+    <div id="xlsBody" style="display:flex;flex-direction:column;gap:14px;margin-top:14px"></div>
+  </div>
+</div>
 
 <div class="toast" id="toast" hidden><span id="toastMsg"></span><button type="button" id="toastAct" hidden>Desfer</button></div>
 
@@ -499,6 +517,7 @@ var UI={view:'resum',filter:'all',q:'',tq:null,pmode:'m',pidx:null,mper:null,edi
 
 /* ---------- Càlculs ---------- */
 function yr(){return +S.settings.year}
+function qY(y){return (y!==CY&&S.quotaY&&S.quotaY[y]!=null)?S.quotaY[y]:S.settings.quota}
 function movesY(y){return S.moves.filter(function(m){return +m.d.slice(0,4)===y})}
 function inQ(m,y,q){return +m.d.slice(0,4)===y&&qOf(m.d)===q}
 function ivaAmt(m){return m.base*m.iva/100}
@@ -522,7 +541,7 @@ function m303(y,q){var carry=0,out;
 function cum130(y,k){var ing=0,desp=0,ret=0,retBase=0;
   S.moves.forEach(function(m){if(+m.d.slice(0,4)!==y||qOf(m.d)>k)return;
     if(m.t==='in'){ing+=m.base;ret+=retAmt(m);if(m.ret>0)retBase+=m.base}else if(m.ded){desp+=m.base;if(m.iva>0&&false)desp+=0}});
-  var qm=S.settings.autoQuota?quotaMonths(y,k*3-1):0;var quota=r2(qm*S.settings.quota);
+  var qm=S.settings.autoQuota?quotaMonths(y,k*3-1):0;var quota=r2(qm*qY(y));
   var pre=ing-desp-quota;var dj=S.settings.dificil?Math.min(2000,Math.max(0,pre*.05)):0;
   var b02=r2(desp+quota+dj);
   return {b01:r2(ing),desp:r2(desp),quota:quota,qm:qm,dj:r2(dj),b02:b02,b03:r2(ing-b02),b06:r2(ret),retShare:ing?retBase/ing:0};}
@@ -551,8 +570,8 @@ function yearSummary(y){
   ms.forEach(function(m){var mo=+m.d.slice(5,7)-1;
     if(m.t==='in'){fact+=m.base;inc[mo]+=m.base;if(!m.paid){pend+=cashAmt(m);pendN++}}
     else{var cost=m.base+(m.ded?0:ivaAmt(m));desp+=cost;out[mo]+=cost;cats[m.cat]=(cats[m.cat]||0)+cost;if(!m.ded)despNoDed+=cost}});
-  var qm=S.settings.autoQuota?quotaMonths(y,11):0;var quota=qm*S.settings.quota;
-  if(S.settings.autoQuota){for(var i=0;i<12;i++){if(i<qm)out[i]+=S.settings.quota}if(quota)cats['Quota d\'autònom']=quota}
+  var qm=S.settings.autoQuota?quotaMonths(y,11):0;var quota=qm*qY(y);
+  if(S.settings.autoQuota){for(var i=0;i<12;i++){if(i<qm)out[i]+=qY(y)}if(quota)cats['Quota d\'autònom']=quota}
   var rnY=fact-(desp-despNoDed)-quota;var dj=S.settings.dificil?Math.min(2000,Math.max(0,rnY*.05)):0;rnY-=dj;
   var div=me||12;var annual=rnY*12/div;var irpfY=irpfAnual(annual);var irpf=me?irpfY*me/12:0;
   var net=fact-desp-quota-irpf;
@@ -705,7 +724,7 @@ function periodStats(y,ms,rate){
     if(m.t==='in'){r.inc+=m.base;r.ivaR+=ivaAmt(m);if(!m.paid){r.pend+=cashAmt(m);r.pendN++}var k=m.cat==='Institucions'&&m.p?m.p:m.cat;r.src[k]=(r.src[k]||0)+m.base}
     else{var cost=m.base+(m.ded?0:ivaAmt(m));r.out+=cost;if(m.ded){r.outDed+=m.base;r.ivaS+=ivaAmt(m)}r.cats[m.cat]=(r.cats[m.cat]||0)+cost}});
   var lim=y<CY?11:y>CY?-1:CM;var qm=S.settings.autoQuota?ms.filter(function(i){return i<=lim}).length:0;
-  r.quota=qm*S.settings.quota;if(r.quota)r.cats['Quota d\'autònom']=r.quota;
+  r.quota=qm*qY(y);if(r.quota)r.cats['Quota d\'autònom']=r.quota;
   var rn=r.inc-r.outDed-r.quota;r.irpf=Math.max(0,rn*(S.settings.dificil?.95:1))*rate;
   r.net=r.inc-r.out-r.quota-r.irpf;r.ivaNet=r.ivaR-r.ivaS;return r;}
 function defaultIdx(y,list){if(UI.pidx!==null&&UI.pidx<list.length)return UI.pidx;
@@ -855,6 +874,10 @@ function renderAjustos(){
     '<div class="switch"><div class="txt"><div>Despeses de difícil justificació</div><div class="small muted">5% del rendiment, fins a 2.000 € l\'any (estimació directa simplificada)</div></div><input type="checkbox" class="tog" id="s-dj"'+(st.dificil?' checked':'')+'></div>'+
     '<div class="field"><span class="lab">Retenció a les teves factures a empreses</span><div class="opts">'+[[15,'15% general'],[7,'7% nou autònom']].map(function(o){return '<button type="button" class="opt" data-set="retDef" data-v="'+o[0]+'" aria-pressed="'+(st.retDef===o[0])+'">'+o[1]+'</button>'}).join('')+'</div><div class="small muted">El 7% s\'aplica l\'any d\'alta i els dos següents.</div></div>'+
     '<div class="field"><span class="lab">IVA per defecte als ingressos</span><div class="opts">'+[21,10,0].map(function(v){return '<button type="button" class="opt" data-set="ivaDef" data-v="'+v+'" aria-pressed="'+(st.ivaDef===v)+'">'+(v?v+'%':'Exempt')+'</button>'}).join('')+'</div></div></div>';
+  var oq=Object.keys(S.quotaY||{}).filter(function(k){return +k!==CY}).sort().reverse();
+  h+='<div class="card set"><h2 class="h2">Importar des d\'Excel</h2><p class="small muted" style="margin:0">Tria un o diversos fitxers de comptabilitat trimestral (amb les fulles INGRESSOS i GASTOS). L\'app llegeix els ingressos, les despeses, l\'IVA i les retencions, i abans d\'importar-los te\'n mostra un resum. Els moviments que ja tens no es dupliquen.</p>'+
+    '<div class="btnrow"><label class="btn primary" for="xlsIn" style="cursor:pointer">Triar fitxers Excel</label><input type="file" id="xlsIn" accept=".xlsx,.xls,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" multiple hidden></div>'+
+    (oq.length?'<div class="small muted">Quota d\'autònom dels anys importats: '+oq.map(function(k){return k+': <b class="num">'+eur(S.quotaY[k])+'</b>'}).join(' · ')+'</div>':'')+'</div>';
   h+='<div class="card set"><h2 class="h2">Les teves dades</h2><p class="small muted" style="margin:0">Tot es guarda només en aquest dispositiu. Fes una còpia de tant en tant.</p>'+
     '<div class="btnrow"><button type="button" class="btn" id="exp">Desar còpia (.json)</button><button type="button" class="btn" id="cpy">Copiar dades</button><label class="btn" for="imp" style="cursor:pointer">Restaurar còpia</label><input type="file" id="imp" accept="application/json,.json" hidden></div>'+
     '<div class="btnrow"><button type="button" class="btn" id="loadSample">Carregar dades d\'exemple</button><button type="button" class="btn danger" id="wipe">Esborrar-ho tot</button></div>'+
@@ -868,6 +891,7 @@ function renderAjustos(){
   $('#exp').addEventListener('click',exportFile);
   $('#cpy').addEventListener('click',function(){var t=JSON.stringify(S);try{navigator.clipboard.writeText(t).then(function(){toast('Dades copiades')},function(){toast('No s\'ha pogut copiar')})}catch(e){toast('No s\'ha pogut copiar')}});
   $('#imp').addEventListener('change',importFile);
+  $('#xlsIn').addEventListener('change',function(e){var fs=[].slice.call(e.target.files||[]);e.target.value='';if(fs.length)xlsImport(fs)});
   armBtn($('#loadSample'),'Confirma: substituir',function(){S=sample();UI.tq=null;commit('Dades d\'exemple carregades')});
   armBtn($('#wipe'),'Confirma: esborrar',function(){var snap=JSON.parse(JSON.stringify(S));S={v:1,sample:false,moves:[],filed:{},settings:Object.assign(defaults(),{quota:S.settings.quota,retDef:S.settings.retDef,ivaDef:S.settings.ivaDef})};save();render();
     toast('Tot esborrat',function(){S=snap;commit('Dades recuperades')})});
@@ -915,6 +939,106 @@ function catDefaults(){var c=$('#f-cat').value;
 function partyDefaults(){var p=$('#f-party').value.trim();if(!p||UI.editing)return;
   var last=S.moves.filter(function(m){return m.t===UI.type&&m.p===p})[0];if(!last)return;
   UI.iva=last.iva;UI.ret=last.ret;$('#f-cat').value=last.cat;if(!$('#f-concept').value)$('#f-concept').value=last.c.replace(/·.*$/,'').trim();drawOpts();}
+
+/* ---------- Importar Excel ---------- */
+var XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',xlsxP=null;
+function loadXLSX(){if(window.XLSX)return Promise.resolve(window.XLSX);if(xlsxP)return xlsxP;
+  xlsxP=new Promise(function(res,rej){var sc=document.createElement('script');sc.src=XLSX_URL;sc.onload=function(){window.XLSX?res(window.XLSX):rej()};sc.onerror=function(){xlsxP=null;rej()};document.head.appendChild(sc)});return xlsxP}
+var MESX={gener:1,enero:1,febrer:2,febrero:2,'març':3,marc:3,marzo:3,abril:4,maig:5,mayo:5,juny:6,junio:6,juliol:7,julio:7,agost:8,agosto:8,setembre:9,septiembre:9,setiembre:9,octubre:10,novembre:11,noviembre:11,desembre:12,diciembre:12};
+var INSTX={"patronat municipal d'esports de valls":"Patronat Municipal d'Esports de Valls","col.legi sant pau apostol":"Col·legi Sant Pau Apòstol","ajuntament el pla de santa maria":"Ajuntament del Pla de Santa Maria"};
+function xs(v){return v==null?'':String(v).replace(/\s+/g,' ').trim()}
+function xn(v){if(typeof v==='number')return v;if(typeof v==='string'){var n=parseNum(v);return isNaN(n)?0:n}return 0}
+function xmonth(v){var k=xs(v).toLowerCase();return MESX[k]||null}
+function expCat(name,hdr){var n=name.toLowerCase(),h=(hdr||'').toLowerCase();
+  if(/lloguer|alquiler|arrendam/.test(h)||/guillemat/.test(n))return ['Lloguer local','Lloguer del local'];
+  if(/endesa|gaolania|iberdrola|naturgy|holaluz|el[eè]ctric/.test(n))return ['Subministraments','Llum del local'];
+  if(/serveis municipals|aig[uü]es|agua/.test(n))return ['Subministraments','Aigua del local'];
+  if(/energia|aigua|agua/.test(h))return ['Subministraments','Subministraments'];
+  if(/basora|gestor|assessor|asesor/.test(n))return ['Assessoria','Gestoria'];
+  if(/avellana|digital|web|google|wix/.test(n))return ['Publicitat i web','Serveis web'];
+  if(/xfera|movistar|vodafone|orange|digi|telef/.test(n))return ['Telèfon i internet','Telefonia'];
+  if(/leroy|werkhaus|bricolat|ikea/.test(n))return ['Altres despeses','Compra de material per al local'];
+  if(/asseguran|seguro|mapfre|axa|allianz/.test(n))return ['Assegurances','Assegurança'];
+  if(/ajuntament|ayuntamiento/.test(n))return ['Altres despeses','Taxes municipals'];
+  return ['Altres despeses','Despesa']}
+function findHdr(rows){for(var i=0;i<Math.min(rows.length,40);i++){var r=rows[i]||[],mes=-1,nom=-1;
+    for(var j=0;j<r.length;j++){var t=xs(r[j]).toLowerCase();if(t==='mes')mes=j;if(/raz[oó]n social|nom i cognoms|nombre y apellidos/.test(t))nom=j}
+    if(mes>-1&&nom>-1)return {i:i,mes:mes,nom:nom}}return null}
+function colInfo(rows,h){var hr=rows[h.i]||[],up=rows[h.i-1]||[],c={};
+  for(var j=0;j<Math.max(hr.length,up.length);j++){var t=xs(hr[j]).toLowerCase(),u=xs(up[j]).toLowerCase();
+    if(/^d[ií]a$/.test(t))c.dia=j;else if(/factura/.test(t))c.fac=j;else if(/n\.?\s*i\.?\s*f/.test(t))c.nif=j;
+    else if(/^tipo/.test(t)&&c.tipo==null)c.tipo=j;else if(/^retenci[oó]\s*\d+/.test(t))c.retp=j;else if(/^retenci[oó]$/.test(t))c.reta=j}
+  c.amts=[];c.hdr={};var end=c.tipo!=null?c.tipo:h.nom+4;
+  for(j=h.nom+1;j<end;j++){c.amts.push(j);c.hdr[j]=(xs(up[j])+' '+xs(hr[j])).trim()}
+  return c}
+function snapRet(p){var opts=[7,15,19];var b=opts[0];opts.forEach(function(o){if(Math.abs(o-p)<Math.abs(b-p))b=o});return Math.abs(b-p)<3?b:Math.round(p)}
+function parseBook(wb,fname){
+  var out={moves:[],quota:null,warn:[]},ym=String(fname).match(/(20\d\d)/);out.year=ym?+ym[1]:null;
+  var quotas=[];
+  wb.SheetNames.forEach(function(sn){var kind=/ingres/i.test(sn)?'in':/gast|despes/i.test(sn)?'out':null;if(!kind)return;
+    var rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:null});var h=findHdr(rows);if(!h){out.warn.push('No he trobat la capçalera a «'+sn+'»');return}
+    var c=colInfo(rows,h);
+    for(var i=h.i+1;i<rows.length;i++){var r=rows[i]||[];var name=xs(r[h.nom]);if(!name)continue;
+      var isAut=/aut[oò]nom/i.test(name);
+      if(kind==='out'){c.amts.forEach(function(j){if(/aut[oó]nom/i.test(c.hdr[j])&&xn(r[j])>0)quotas.push(xn(r[j]))});
+        if(isAut){var qa=0;c.amts.forEach(function(j){qa+=xn(r[j])});if(qa>0)quotas.push(qa);continue}}
+      var mo=xmonth(r[h.mes]);if(!mo)continue;
+      var base=0,mainHdr='',mx=0;c.amts.forEach(function(j){if(/aut[oó]nom/i.test(c.hdr[j]))return;var v=xn(r[j]);base+=v;if(v>mx){mx=v;mainHdr=c.hdr[j]}});
+      if(base<=0)continue;
+      var rate=c.tipo!=null?xn(r[c.tipo]):0;if(rate>0&&rate<1)rate*=100;rate=Math.round(rate);
+      var ra=c.reta!=null?xn(r[c.reta]):0,ret=ra>0?snapRet(ra/base*100):0;
+      var d=c.dia!=null&&typeof r[c.dia]==='number'?Math.round(r[c.dia]):1;
+      var fac=c.fac!=null?xs(r[c.fac]):'';var nif=c.nif!=null?xs(r[c.nif]).replace(/\s/g,''):'';
+      out.moves.push({t:kind,mo:mo,day:d,name:name,base:Math.round(base*1000)/1000,iva:rate,ret:ret,fac:fac,nif:nif,hdr:mainHdr})}});
+  if(quotas.length){var cnt={};quotas.forEach(function(q){var k=q.toFixed(2);cnt[k]=(cnt[k]||0)+1});out.quota=+Object.keys(cnt).sort(function(a,b){return cnt[b]-cnt[a]})[0]}
+  return out}
+function buildMoves(pb,y){var MN=MES;return pb.moves.map(function(x){var last=new Date(y,x.mo,0).getDate(),d=Math.max(1,Math.min(last,x.day));
+    var ds=y+'-'+pad(x.mo)+'-'+pad(d),fac=x.fac?' (fra. '+x.fac+')':'';
+    if(x.t==='in'){var inst=INSTX[x.name.toLowerCase()];var isInst=inst||x.ret>0||(x.fac&&/^[A-Z]/i.test(x.nif));
+      return isInst?{t:'in',d:ds,c:'Classes de ioga · '+MN[x.mo-1]+fac,p:inst||x.name,cat:'Institucions',base:x.base,iva:x.iva,ret:x.ret,paid:true,ded:true}
+        :{t:'in',d:ds,c:'Quota de classes · '+MN[x.mo-1],p:x.name,cat:'Classes regulars',base:x.base,iva:x.iva,ret:0,paid:true,ded:true}}
+    var ec=expCat(x.name,x.hdr);
+    return {t:'out',d:ds,c:ec[1]+' · '+MN[x.mo-1]+fac,p:x.name.replace('S,C,P,','SCP'),cat:ec[0],base:x.base,iva:x.iva,ret:x.ret,paid:true,ded:true}})}
+function mkey(m){return [m.t,m.d,(m.p||'').toLowerCase(),(+m.base).toFixed(2)].join('|')}
+var XI=null;
+function xlsImport(files){var body=$('#xlsBody');XI={files:[]};
+  body.innerHTML='<div class="spin" aria-label="Llegint"></div><p class="small muted" style="text-align:center;margin:0">Llegint '+files.length+(files.length===1?' fitxer':' fitxers')+'…</p>';
+  $('#xlsWrap').hidden=false;document.body.style.overflow='hidden';
+  loadXLSX().then(function(){return Promise.all(files.map(function(f){return f.arrayBuffer().then(function(buf){
+      try{var wb=XLSX.read(buf,{type:'array'});var pb=parseBook(wb,f.name);return {name:f.name,pb:pb,year:pb.year||yr()}}catch(e){return {name:f.name,err:'No s\'ha pogut llegir aquest fitxer.'}}})}))})
+  .then(function(rs){XI.files=rs;xlsPreview()},function(){body.innerHTML='<div class="note">Per llegir Excel l\'app necessita connexió a internet la primera vegada. Torna-ho a provar amb connexió.</div>'})}
+function xlsCompute(){var have={};S.moves.forEach(function(m){have[mkey(m)]=1});var add=[],seen={},tot={n:0,dup:0,inc:0,out:0};
+  XI.files.forEach(function(f){if(f.err)return;f.ms=buildMoves(f.pb,f.year);f.n=0;f.dup=0;f.inc=0;f.out=0;f.ys={};
+    f.ms.forEach(function(m){var k=mkey(m);if(have[k]||seen[k]){f.dup++;return}seen[k]=1;f.n++;if(m.t==='in')f.inc+=m.base;else f.out+=m.base;add.push(m)});
+    tot.n+=f.n;tot.dup+=f.dup;tot.inc+=f.inc;tot.out+=f.out});return {add:add,tot:tot}}
+function xlsPreview(){var c=xlsCompute(),body=$('#xlsBody');
+  body.innerHTML=XI.files.map(function(f,k){if(f.err)return '<div class="xf err"><div class="fn">'+esc(f.name)+'</div><div class="small">'+f.err+'</div></div>';
+    var qs={};f.ms.forEach(function(m){qs[qOf(m.d)]=1});
+    return '<div class="xf"><div class="fn">'+esc(f.name)+'</div>'+
+      '<div class="yr"><label for="xy'+k+'">Any</label><input class="inp num" id="xy'+k+'" data-xy="'+k+'" inputmode="numeric" value="'+f.year+'">'+(Object.keys(qs).length?'<span>Trimestres: '+Object.keys(qs).sort().map(function(q){return q+'T'}).join(', ')+'</span>':'')+'</div>'+
+      '<div class="grid num"><span class="muted">Moviments nous</span><span class="v">'+f.n+'</span>'+
+      '<span class="muted">Ingressos (bases)</span><span class="v" style="color:var(--pos)">+'+eur(f.inc)+'</span>'+
+      '<span class="muted">Despeses (bases)</span><span class="v">−'+eur(f.out)+'</span>'+
+      (f.dup?'<span class="muted">Ja els tenies (no es dupliquen)</span><span class="v">'+f.dup+'</span>':'')+
+      (f.pb.quota?'<span class="muted">Quota d\'autònom detectada</span><span class="v">'+eur(f.pb.quota)+'/mes</span>':'')+'</div>'+
+      (f.pb.warn.length?'<div class="small" style="color:var(--warn)">'+f.pb.warn.map(esc).join('<br>')+'</div>':'')+
+      (!f.ms.length?'<div class="small" style="color:var(--warn)">No he trobat moviments en aquest fitxer.</div>':'')+'</div>'}).join('')+
+    '<div class="xtot num">Total a importar: <b>'+c.tot.n+' moviments</b>'+(c.tot.dup?' · '+c.tot.dup+' ja existents':'')+'</div>'+
+    '<div class="switch"><div class="txt"><div>Marcar aquests trimestres com a presentats</div><div class="small muted">Si ja vas presentar els models a Hisenda</div></div><input type="checkbox" class="tog" id="xFiled" checked></div>'+
+    '<div class="row"><span></span><button type="button" class="btn primary" id="xGo"'+(c.tot.n?'':' disabled')+'>Importar '+c.tot.n+' moviments</button></div>';
+  $$('[data-xy]',body).forEach(function(inp){inp.addEventListener('change',function(){var v=parseInt(inp.value,10);if(v>=2000&&v<=2100){XI.files[+inp.dataset.xy].year=v;xlsPreview()}else{toast('Escriu un any vàlid, per exemple 2025')}})});
+  var go=$('#xGo');go.addEventListener('click',function(){var c2=xlsCompute();if(!c2.add.length)return;var snap=JSON.parse(JSON.stringify(S));var markF=$('#xFiled').checked;
+    c2.add.forEach(function(m){m.id=uid();S.moves.push(m)});
+    S.moves.sort(function(a,b){return a.d<b.d?1:a.d>b.d?-1:0});
+    S.quotaY=S.quotaY||{};var years={};
+    XI.files.forEach(function(f){if(f.err||!f.ms)return;f.ms.forEach(function(m){var y=+m.d.slice(0,4);years[y]=1;if(markF)['303','130','111','115'].forEach(function(k){S.filed[y+'-'+qOf(m.d)+'-'+k]=true})});
+      if(f.pb.quota){if(f.year===CY)S.settings.quota=r2(f.pb.quota);else S.quotaY[f.year]=r2(f.pb.quota)}});
+    if(S.sample){S.sample=false}
+    var ys=Object.keys(years).map(Number).sort();if(ys.length)S.settings.year=ys[ys.length-1];UI.tq=null;UI.pidx=null;
+    closeXls();save();render();toast(c2.add.length+' moviments importats',function(){S=snap;commit('Importació desfeta')})})}
+function closeXls(){$('#xlsWrap').hidden=true;document.body.style.overflow='';XI=null}
+$('#xlsClose').addEventListener('click',closeXls);
+$('#xlsWrap').addEventListener('click',function(e){if(e.target.id==='xlsWrap')closeXls()});
 
 /* ---------- Esdeveniments ---------- */
 function commit(msg){save();render();if(msg)toast(msg)}
